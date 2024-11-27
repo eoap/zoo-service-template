@@ -238,7 +238,7 @@ class SimpleExecutionHandler(ExecutionHandler):
                 for j in range(len(keys)):
                     self.conf["service_logs"][keys[j]] = services_logs[i][okeys[j]]
                 cindex += 1
-                logger.warn(f"service_logs: {self.conf['service_logs']}")
+                logger.warning(f"service_logs: {self.conf['service_logs']}")
 
             self.conf["service_logs"]["length"] = str(cindex)
             logger.info(f"service_logs: {self.conf['service_logs']}")
@@ -302,6 +302,7 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  #
         logger.error("Try to fetch the tool logs if any...")
 
         try:
+            # TODO: Why does this job log not fetched in case of success?
             with open(os.path.join(
                 conf["main"]["tmpPath"], 
                 runner.get_namespace_name(),
