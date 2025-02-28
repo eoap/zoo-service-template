@@ -30,7 +30,7 @@ from loguru import logger
 from urllib.parse import urlparse
 from botocore.exceptions import ClientError
 from botocore.client import Config
-from pystac import read_file
+from pystac import read_file, Collection, Catalog
 from pystac.stac_io import DefaultStacIO, StacIO
 from pystac.item_collection import ItemCollection
 from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
@@ -47,10 +47,10 @@ class CustomStacIO(DefaultStacIO):
         self.session = botocore.session.Session()
         self.s3_client = self.session.create_client(
             service_name="s3",
-            region_name="us-east-1",
-            endpoint_url="http://eoap-zoo-project-localstack.eoap-zoo-project.svc.cluster.local:4566",
-            aws_access_key_id="test",
-            aws_secret_access_key="test",
+            region_name=os.environ["AWS_S3_REGION"],
+            endpoint_url=os.environ["AWS_S3_ENDPOINT"],
+            aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
         )
 
     def read_text(self, source, *args, **kwargs):
@@ -97,13 +97,18 @@ class SimpleExecutionHandler(ExecutionHandler):
         # unset HTTP proxy or else the S3 client will use it and fail
         os.environ.pop("HTTP_PROXY", None)
 
+        os.environ["AWS_S3_REGION"] = self.get_additional_parameters()["region_name"]
+        os.environ["AWS_S3_ENDPOINT"] = self.get_additional_parameters()["endpoint_url"]
+        os.environ["AWS_ACCESS_KEY_ID"] = self.get_additional_parameters()["aws_access_key_id"]
+        os.environ["AWS_SECRET_ACCESS_KEY"] = self.get_additional_parameters()["aws_secret_access_key"]
+
         logger.info("Post execution hook")
 
         StacIO.set_default(CustomStacIO)
 
         logger.info(f"Read catalog from STAC Catalog URI: {output['s3_catalog_output']}")
 
-        cat = read_file(output["s3_catalog_output"])
+        cat: Catalog  = read_file(output["s3_catalog_output"])
 
         collection_id = self.get_additional_parameters()["sub_path"]
 
@@ -111,7 +116,7 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         collection = None
 
-        collection = next(cat.get_all_collections())
+        collection: Collection = next(cat.get_all_collections())
 
         logger.info("Got collection {collection.id} from processing outputs")
         
@@ -155,7 +160,7 @@ class SimpleExecutionHandler(ExecutionHandler):
         self.results = item_collection.to_dict()
         self.results["id"] = collection_id
 
-    def get_pod_env_vars(self):
+    def get_pod_env_vars(self) -> Dict[str, str]:
         # This method is used to set environment variables for the pod
         # spawned by calrissian.
 
@@ -165,7 +170,7 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         return env_vars
 
-    def get_pod_node_selector(self):
+    def get_pod_node_selector(self) -> Dict[str, str]:
         # This method is used to set node selectors for the pod
         # spawned by calrissian.
 
@@ -175,7 +180,7 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         return node_selector
 
-    def get_additional_parameters(self):
+    def get_additional_parameters(self) -> Dict[str, str]:
         # sets the additional parameters for the execution
         # of the wrapped Application Package
 
