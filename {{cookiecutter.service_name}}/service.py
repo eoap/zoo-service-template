@@ -166,7 +166,8 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         logger.info("get_pod_env_vars")
 
-        env_vars = {"A": "1", "B": "2"}
+        env_vars: Dict[str, str] = {}
+        env_vars = self.conf.get("pod_env_vars", {})
 
         return env_vars
 
@@ -175,8 +176,10 @@ class SimpleExecutionHandler(ExecutionHandler):
         # spawned by calrissian.
 
         logger.info("get_pod_node_selector")
+        node_selector: Dict[str, str] = {}
+        node_selector = self.conf.get("pod_node_selector", {})
 
-        node_selector = {}
+        logger.info(f"node_selector: {node_selector.keys()}")
 
         return node_selector
 
@@ -246,7 +249,8 @@ class SimpleExecutionHandler(ExecutionHandler):
             raise (e)
 
     def get_secrets(self):
-        return {}
+        logger.info("get_secrets")
+        return self.local_get_file("/assets/pod_imagePullSecrets.yaml")
 
 
 def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  # noqa
