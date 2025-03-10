@@ -160,6 +160,27 @@ class SimpleExecutionHandler(ExecutionHandler):
         self.results = item_collection.to_dict()
         self.results["id"] = collection_id
 
+    @staticmethod
+    def local_get_file(fileName):
+        """
+        Read and load the contents of a yaml file
+
+        :param yaml file to load
+        """
+        try:
+            with open(fileName, "r") as file:
+                data = yaml.safe_load(file)
+            return data
+        # if file does not exist
+        except FileNotFoundError:
+            return {}
+        # if file is empty
+        except yaml.YAMLError:
+            return {}
+        # if file is not yaml
+        except yaml.scanner.ScannerError:
+            return {}
+
     def get_pod_env_vars(self) -> Dict[str, str]:
         # This method is used to set environment variables for the pod
         # spawned by calrissian.
