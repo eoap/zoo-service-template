@@ -160,13 +160,35 @@ class SimpleExecutionHandler(ExecutionHandler):
         self.results = item_collection.to_dict()
         self.results["id"] = collection_id
 
+    @staticmethod
+    def local_get_file(fileName):
+        """
+        Read and load the contents of a yaml file
+
+        :param yaml file to load
+        """
+        try:
+            with open(fileName, "r") as file:
+                data = yaml.safe_load(file)
+            return data
+        # if file does not exist
+        except FileNotFoundError:
+            return {}
+        # if file is empty
+        except yaml.YAMLError:
+            return {}
+        # if file is not yaml
+        except yaml.scanner.ScannerError:
+            return {}
+
     def get_pod_env_vars(self) -> Dict[str, str]:
         # This method is used to set environment variables for the pod
         # spawned by calrissian.
 
         logger.info("get_pod_env_vars")
 
-        env_vars = {"A": "1", "B": "2"}
+        env_vars: Dict[str, str] = {}
+        env_vars = self.conf.get("pod_env_vars", {})
 
         return env_vars
 
@@ -175,8 +197,10 @@ class SimpleExecutionHandler(ExecutionHandler):
         # spawned by calrissian.
 
         logger.info("get_pod_node_selector")
+        node_selector: Dict[str, str] = {}
+        node_selector = self.conf.get("pod_node_selector", {})
 
-        node_selector = {}
+        logger.info(f"node_selector: {node_selector.keys()}")
 
         return node_selector
 
@@ -246,7 +270,12 @@ class SimpleExecutionHandler(ExecutionHandler):
             raise (e)
 
     def get_secrets(self):
-        return {}
+        logger.info("get_secrets")
+        secrets={
+            "imagePullSecrets": self.local_get_file("/assets/pod_imagePullSecrets.yaml"),
+            "additionalImagePullSecrets": self.local_get_file("/assets/pod_additionalImagePullSecrets.yaml")
+        }
+        return secrets
 
 
 def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  # noqa
@@ -283,7 +312,7 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  #
 
         if exit_status == zoo.SERVICE_SUCCEEDED:
             logger.info(f"Setting Collection into output key {list(outputs.keys())[0]}")
-            outputs["stac_catalog"]["value"] = json.dumps(
+            outputs[list(outputs.keys())[0]]["value"] = json.dumps(
                 execution_handler.results, indent=2
             )
             return zoo.SERVICE_SUCCEEDED
