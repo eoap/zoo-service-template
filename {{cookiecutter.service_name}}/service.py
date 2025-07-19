@@ -1,21 +1,5 @@
 import pathlib
 
-try:
-    import zoo
-except ImportError:
-
-    class ZooStub(object):
-        def __init__(self):
-            self.SERVICE_SUCCEEDED = 3
-            self.SERVICE_FAILED = 4
-
-        def update_status(self, conf, progress):
-            print(f"Status {progress}")
-
-        def _(self, message):
-            print(f"invoked _ with {message}")
-
-    zoo = ZooStub()
 
 import os
 import sys
@@ -31,8 +15,14 @@ from botocore.client import Config
 from pystac import read_file
 from pystac.stac_io import DefaultStacIO, StacIO
 from pystac.item_collection import ItemCollection
-from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
+from zoo_calrissian_runner import ZooCalrissianRunner
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../zoo-runner-common')))
+from base_handler import ExecutionHandler
+
+
+from zoostub import ZooStub
+zoo = ZooStub()
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
