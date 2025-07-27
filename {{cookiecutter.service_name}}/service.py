@@ -17,8 +17,11 @@ from pystac.stac_io import DefaultStacIO, StacIO
 from pystac.item_collection import ItemCollection
 from zoo_calrissian_runner import ZooCalrissianRunner
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../zoo-runner-common')))
-from base_handler import ExecutionHandler
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../zoo-runner-common')))
+#from base_handler import ExecutionHandler
+
+from common_execution_handler import CommonExecutionHandler
+from common_stac_io import CustomStacIO
 
 
 from zoostub import ZooStub
@@ -28,10 +31,10 @@ logger.remove()
 logger.add(sys.stderr, level="INFO")
 
 
-class CustomStacIO(DefaultStacIO):
+class CustomStacIO2(CustomStacIO):
     """Custom STAC IO class that uses boto3 to read from S3."""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.session = botocore.session.Session()
         self.s3_client = self.session.create_client(
             service_name="s3",
@@ -41,46 +44,17 @@ class CustomStacIO(DefaultStacIO):
             aws_secret_access_key="test",
         )
 
-    def read_text(self, source, *args, **kwargs):
-        parsed = urlparse(source)
-        if parsed.scheme == "s3":
-            return (
-                self.s3_client.get_object(Bucket=parsed.netloc, Key=parsed.path[1:])[
-                    "Body"
-                ]
-                .read()
-                .decode("utf-8")
-            )
-        else:
-            return super().read_text(source, *args, **kwargs)
-
-    def write_text(self, dest, txt, *args, **kwargs):
-        parsed = urlparse(dest)
-        if parsed.scheme == "s3":
-            self.s3_client.put_object(
-                Body=txt.encode("UTF-8"),
-                Bucket=parsed.netloc,
-                Key=parsed.path[1:],
-                ContentType="application/geo+json",
-            )
-        else:
-            super().write_text(dest, txt, *args, **kwargs)
+StacIO.set_default(CustomStacIO2)
 
 
-StacIO.set_default(CustomStacIO)
+class SimpleExecutionHandler(CommonExecutionHandler):
+    #def __init__(self, conf, **kwargs):
+    #    super().__init__()
+    #    self.conf = conf
+    #    self.results = None
 
 
-class SimpleExecutionHandler(ExecutionHandler):
-    def __init__(self, conf):
-        super().__init__()
-        self.conf = conf
-        self.results = None
-
-    def pre_execution_hook(self):
-
-        logger.info("Pre execution hook")
-
-    def post_execution_hook(self, log, output, usage_report, tool_logs):
+    def post_execution_hook(self, log, output, usage_report, tool_logs, **kwargs):
 
         # unset HTTP proxy or else the S3 client will use it and fail
         os.environ.pop("HTTP_PROXY", None)
@@ -143,7 +117,7 @@ class SimpleExecutionHandler(ExecutionHandler):
         self.results = item_collection.to_dict()
         self.results["id"] = collection_id
 
-    def get_pod_env_vars(self):
+    def get_pod_env_vars(self, **kwargs):
         # This method is used to set environment variables for the pod
         # spawned by calrissian.
 
@@ -153,17 +127,17 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         return env_vars
 
-    def get_pod_node_selector(self):
-        # This method is used to set node selectors for the pod
-        # spawned by calrissian.
+    #def get_pod_node_selector(self):
+    #    # This method is used to set node selectors for the pod
+    #    # spawned by calrissian.
+    #
+    #    logger.info("get_pod_node_selector")
+    #
+    #    node_selector = {}
+    #
+    #    return node_selector
 
-        logger.info("get_pod_node_selector")
-
-        node_selector = {}
-
-        return node_selector
-
-    def get_additional_parameters(self):
+    def get_additional_parameters(self, **kwargs):
         # sets the additional parameters for the execution
         # of the wrapped Application Package
 
@@ -182,7 +156,7 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         return additional_parameters
 
-    def handle_outputs(self, log, output, usage_report, tool_logs):
+    def handle_outputs(self, log, output, usage_report, tool_logs, **kwargs):
         """
         Handle the output files of the execution.
 
