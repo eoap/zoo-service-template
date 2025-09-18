@@ -83,32 +83,21 @@ StacIO.set_default(CustomStacIO)
 
 
 class SimpleExecutionHandler(ExecutionHandler):
-    def __init__(self, conf):
+    def __init__(self, conf, outputs):
         super().__init__()
         self.conf = conf
+        self.outputs = outputs
         self.results = None
 
     def pre_execution_hook(self):
 
         logger.info("Pre execution hook")
 
-    def post_execution_hook(self, log, output, usage_report, tool_logs):
+    def setOutput(self, outputName, values):
+        output=self.outputs[outputName]
+        logger.info(f"Read catalog from STAC Catalog URI: {output} -> {values}")
 
-        # unset HTTP proxy or else the S3 client will use it and fail
-        os.environ.pop("HTTP_PROXY", None)
-
-        os.environ["AWS_S3_REGION"] = self.get_additional_parameters()["region_name"]
-        os.environ["AWS_S3_ENDPOINT"] = self.get_additional_parameters()["endpoint_url"]
-        os.environ["AWS_ACCESS_KEY_ID"] = self.get_additional_parameters()["aws_access_key_id"]
-        os.environ["AWS_SECRET_ACCESS_KEY"] = self.get_additional_parameters()["aws_secret_access_key"]
-
-        logger.info("Post execution hook")
-
-        StacIO.set_default(CustomStacIO)
-
-        logger.info(f"Read catalog from STAC Catalog URI: {output['s3_catalog_output']}")
-
-        cat: Catalog  = read_file(output["s3_catalog_output"])
+        cat: Catalog  = read_file(values[outputName]["value"])
 
         collection_id = self.get_additional_parameters()["sub_path"]
 
@@ -116,7 +105,13 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         collection = None
 
-        collection: Collection = next(cat.get_all_collections())
+        try:
+            logger.info(f"Catalog : {dir(cat)}")
+            collection: Collection = next(cat.get_all_collections())
+        except Exception as e:
+            logger.error("No collection found in the output catalog")
+            output["collection"] = json.dumps({}, indent=2)
+            return
 
         logger.info("Got collection {collection.id} from processing outputs")
         
@@ -153,12 +148,31 @@ class SimpleExecutionHandler(ExecutionHandler):
         # Trap the case of no output collection
         if item_collection is None:
             logger.error("The output collection is empty")
-            self.feature_collection = json.dumps({}, indent=2)
+            output["collection"] = json.dumps({}, indent=2)
             return
 
         # Set the feature collection to be returned
-        self.results = item_collection.to_dict()
-        self.results["id"] = collection_id
+        output["collection"] = item_collection.to_dict()
+        output["collection"]["id"] = collection_id
+
+    def post_execution_hook(self, log, output, usage_report, tool_logs):
+
+        # unset HTTP proxy or else the S3 client will use it and fail
+        os.environ.pop("HTTP_PROXY", None)
+
+        os.environ["AWS_S3_REGION"] = self.get_additional_parameters()["region_name"]
+        os.environ["AWS_S3_ENDPOINT"] = self.get_additional_parameters()["endpoint_url"]
+        os.environ["AWS_ACCESS_KEY_ID"] = self.get_additional_parameters()["aws_access_key_id"]
+        os.environ["AWS_SECRET_ACCESS_KEY"] = self.get_additional_parameters()["aws_secret_access_key"]
+
+        logger.info("Post execution hook")
+
+        StacIO.set_default(CustomStacIO)
+
+        for i in self.outputs:
+            logger.info(f"Output {i}: {self.outputs[i]}")
+            self.setOutput(i,output)
+
 
     @staticmethod
     def local_get_file(fileName):
@@ -232,9 +246,6 @@ class SimpleExecutionHandler(ExecutionHandler):
         try:
             logger.info("handle_outputs")
 
-            logger.info(f"Set output to {output['s3_catalog_output']}")
-            self.results = {"url": output["s3_catalog_output"]}
-
             self.conf["main"]["tmpUrl"] = self.conf["main"]["tmpUrl"].replace(
                 "temp/", self.conf["auth_env"]["user"] + "/temp/"
             )
@@ -290,7 +301,7 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  #
         ) as stream:
             cwl = yaml.safe_load(stream)
 
-        execution_handler = SimpleExecutionHandler(conf=conf)
+        execution_handler = SimpleExecutionHandler(conf=conf, outputs=outputs)
 
         runner = ZooCalrissianRunner(
             cwl=cwl,
@@ -311,10 +322,11 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  #
         exit_status = runner.execute()
 
         if exit_status == zoo.SERVICE_SUCCEEDED:
-            logger.info(f"Setting Collection into output key {list(outputs.keys())[0]}")
-            outputs[list(outputs.keys())[0]]["value"] = json.dumps(
-                execution_handler.results, indent=2
-            )
+            for i in outputs:
+                logger.info(f"Setting Collection into output key {i}: {outputs[i]}")
+                outputs[i]["value"] = json.dumps(
+                    outputs[i]["collection"], indent=2
+                )
             return zoo.SERVICE_SUCCEEDED
 
         else:
