@@ -97,49 +97,56 @@ class SimpleExecutionHandler(ExecutionHandler):
         output=self.outputs[outputName]
         logger.info(f"Read catalog from STAC Catalog URI: {output} -> {values}")
 
-        cat: Catalog  = read_file(values[outputName]["value"])
+        if not(isinstance(values[outputName], list)):
+            logger.info(f"values[{outputName}] is not a list, tranform to an array")
+            values[outputName]=[values[outputName]]
 
-        collection_id = self.get_additional_parameters()["sub_path"]
-
-        logger.info(f"Create collection with ID {collection_id}")
-
-        collection = None
-
-        try:
-            logger.info(f"Catalog : {dir(cat)}")
-            collection: Collection = next(cat.get_all_collections())
-        except Exception as e:
-            logger.error("No collection found in the output catalog")
-            output["collection"] = json.dumps({}, indent=2)
-            return
-
-        logger.info("Got collection {collection.id} from processing outputs")
-        
         items = []
-        
-        for item in collection.get_all_items():
 
-            logger.info("Processing item {item.id}")
+        for i in range(len(values[outputName])):
+            if values[outputName][i] is None:
+                break
+            cat: Catalog  = read_file(values[outputName][i]["value"])
+
+            collection_id = self.get_additional_parameters()["sub_path"]
+
+            logger.info(f"Create collection with ID {collection_id}")
+
+            collection = None
+
+            try:
+                logger.info(f"Catalog : {dir(cat)}")
+                collection: Collection = next(cat.get_all_collections())
+            except Exception as e:
+                logger.error("No collection found in the output catalog")
+                output["collection"] = json.dumps({}, indent=2)
+                return
+
+            logger.info("Got collection {collection.id} from processing outputs")
             
-            for asset_key in item.assets.keys():
+            for item in collection.get_all_items():
 
-                logger.info(f"Processing asset {asset_key}")
+                logger.info("Processing item {item.id}")
                 
-                temp_asset = item.assets[asset_key].to_dict()
-                temp_asset["storage:platform"] = "eoap"
-                temp_asset["storage:requester_pays"] = False
-                temp_asset["storage:tier"] = "Standard"
-                temp_asset["storage:region"] = self.get_additional_parameters()[
-                    "region_name"
-                ]
-                temp_asset["storage:endpoint"] = self.get_additional_parameters()[
-                    "endpoint_url"
-                ]
-                item.assets[asset_key] = item.assets[asset_key].from_dict(temp_asset)
-            
-            item.collection_id = collection_id
+                for asset_key in item.assets.keys():
 
-            items.append(item.clone())
+                    logger.info(f"Processing asset {asset_key}")
+
+                    temp_asset = item.assets[asset_key].to_dict()
+                    temp_asset["storage:platform"] = "eoap"
+                    temp_asset["storage:requester_pays"] = False
+                    temp_asset["storage:tier"] = "Standard"
+                    temp_asset["storage:region"] = self.get_additional_parameters()[
+                        "region_name"
+                    ]
+                    temp_asset["storage:endpoint"] = self.get_additional_parameters()[
+                        "endpoint_url"
+                    ]
+                    item.assets[asset_key] = item.assets[asset_key].from_dict(temp_asset)
+
+                item.collection_id = collection_id
+
+                items.append(item.clone())
 
         item_collection = ItemCollection(items=items)
 
