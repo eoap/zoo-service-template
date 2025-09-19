@@ -171,7 +171,11 @@ class SimpleExecutionHandler(ExecutionHandler):
 
         for i in self.outputs:
             logger.info(f"Output {i}: {self.outputs[i]}")
-            self.setOutput(i,output)
+            if "mimeType" in self.outputs[i]:
+                self.setOutput(i,output)
+            else:
+                logger.warning(f"Output {i} has no mimeType, skipping...")
+                self.outputs[i]["value"] = str(output[i])
 
 
     @staticmethod
@@ -324,9 +328,10 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  #
         if exit_status == zoo.SERVICE_SUCCEEDED:
             for i in outputs:
                 logger.info(f"Setting Collection into output key {i}: {outputs[i]}")
-                outputs[i]["value"] = json.dumps(
-                    outputs[i]["collection"], indent=2
-                )
+                if "collection" in outputs[i]:
+                    outputs[i]["value"] = json.dumps(
+                        outputs[i]["collection"], indent=2
+                    )
             return zoo.SERVICE_SUCCEEDED
 
         else:
