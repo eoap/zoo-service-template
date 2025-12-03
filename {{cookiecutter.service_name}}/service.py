@@ -190,21 +190,14 @@ class SimpleExecutionHandler(ExecutionHandler):
         return additional_parameters
 
     def handle_outputs(self, log, output, usage_report, tool_logs):
-        """
-        Handle the output files of the execution.
-
-        :param log: The application log file of the execution.
-        :param output: The output file of the execution.
-        :param usage_report: The metrics file.
-        :param tool_logs: A list of paths to individual workflow step logs.
-
-        """
-
         try:
             logger.info("handle_outputs")
 
-            logger.info(f"Set output to {output['s3_catalog_output']}")
-            self.results = {"url": output["s3_catalog_output"]}
+            if output and "s3_catalog_output" in output:
+                logger.info(f"Set output to {output['s3_catalog_output']}")
+                self.results = {"url": output["s3_catalog_output"]}
+            else:
+                logger.info("No catalog output available (probably failed run); only exposing tool logs")
 
             self.conf["main"]["tmpUrl"] = self.conf["main"]["tmpUrl"].replace(
                 "temp/", self.conf["auth_env"]["user"] + "/temp/"
@@ -221,24 +214,24 @@ class SimpleExecutionHandler(ExecutionHandler):
                 }
                 for tool_log in tool_logs
             ]
-            for i in range(len(services_logs)):
+            cindex = int(self.conf.get("service_logs", {}).get("length", "0"))
+            for svc in services_logs:
                 okeys = ["url", "title", "rel"]
                 keys = ["url", "title", "rel"]
-                if i > 0:
-                    for j in range(len(keys)):
-                        keys[j] = keys[j] + "_" + str(i)
-                if "service_logs" not in self.conf:
-                    self.conf["service_logs"] = {}
-                for j in range(len(keys)):
-                    self.conf["service_logs"][keys[j]] = services_logs[i][okeys[j]]
-
-            self.conf["service_logs"]["length"] = str(len(services_logs))
+                if cindex > 0:
+                    keys = [f"{k}_{cindex}" for k in keys]
+                self.conf.setdefault("service_logs", {})
+                for k, ok in zip(keys, okeys):
+                    self.conf["service_logs"][k] = svc[ok]
+                cindex += 1
+                logger.warning(f"service_logs: {self.conf['service_logs']}")
+            self.conf["service_logs"]["length"] = str(cindex)
             logger.info(f"service_logs: {self.conf['service_logs']}")
 
-        except Exception as e:
+        except Exception:
             logger.error("ERROR in handle_outputs...")
             logger.error(traceback.format_exc())
-            raise (e)
+            raise
 
     def get_secrets(self):
         return {}
