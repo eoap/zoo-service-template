@@ -289,7 +289,8 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs):  #
         else:
             conf["lenv"]["message"] = zoo._("Execution failed")
             logger.error("Execution failed")
-            return zoo.SERVICE_FAILED
+            raise Exception
+            # return zoo.SERVICE_FAILED
 
     except Exception as e:
 
